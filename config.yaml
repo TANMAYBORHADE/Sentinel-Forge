@@ -1,0 +1,29 @@
+# SentinelForge config. Only ever point this at apps YOU own, running locally
+# or in a test environment you control. Never production.
+
+target:
+  base_url: http://localhost:3000     # used when you pass neither --url nor --src
+  allowed_hosts: []                   # extra hosts besides localhost / 127.0.0.1 / ::1
+                                      # e.g. ["staging.internal"]  (only if you own it)
+
+http:
+  timeout: 10                         # seconds per request
+
+auth:                                 # used from Phase 4 onwards. TEST ACCOUNTS ONLY.
+  login_route: /rest/user/login
+  signup_route: null
+  users: []
+  #  - { name: alice, role: user,  email: alice@test.local, password: "Test-pass-1!" }
+  #  - { name: bob,   role: user,  email: bob@test.local,   password: "Test-pass-2!" }
+  #  - { name: admin, role: admin, email: admin@test.local, password: "Test-pass-3!" }
+
+upload:
+  route: null
+
+checks:
+  run: [all]                          # or a list of groups / check ids
+  skip: []                            # groups or check ids to skip. Heavy/destructive
+                                      # groups must be opted into explicitly later.
+
+storage:
+  db_path: sentinelforge.db
