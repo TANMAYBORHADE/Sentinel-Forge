@@ -46,6 +46,15 @@ _SECRET_JSON = re.compile(
 )
 
 
+# .env style lines (KEY_SECRET=value), JWTs anywhere in a body, secrets in query strings
+_ENV_SECRET = re.compile(
+    r"(?im)^(\s*(?:export\s+)?[A-Z0-9_.-]*(?:PASSWORD|PASSWD|SECRET|TOKEN|API_?KEY|PRIVATE_KEY|"
+    r"ACCESS_KEY|CREDENTIAL)[A-Z0-9_.-]*\s*=\s*).+$")
+_JWT = re.compile(r"eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]*")
+_SECRET_QUERY = re.compile(
+    r"(?i)([?&](?:password|passwd|token|access_token|refresh_token|api_key|apikey|secret|key|auth)=)[^&#\s]*")
+
+
 def _mask_pair(pair: str) -> str:
     if "=" not in pair:
         return pair
@@ -81,7 +90,13 @@ def redact_body(body: Optional[str]) -> Optional[str]:
     """Best-effort masking of secret-looking JSON values."""
     if body is None:
         return None
-    return _SECRET_JSON.sub(rf'\1"{MASK}"', body)
+    body = _SECRET_JSON.sub(rf'\1"{MASK}"', body)
+    body = _ENV_SECRET.sub(rf"\1{MASK}", body)
+    return _JWT.sub(MASK, body)
+
+
+def redact_url(url: str) -> str:
+    return _SECRET_QUERY.sub(rf"\1{MASK}", url)
 
 
 # --------------------------------------------------------------------------- #
@@ -107,7 +122,7 @@ class Evidence:
             req_b, res_b = redact_body(req_b), redact_body(res_b)
         return {
             "method": self.method,
-            "url": self.url,
+            "url": redact_url(self.url) if redact else self.url,
             "request_headers": req_h,
             "request_body": req_b,
             "status_code": self.status_code,

@@ -5,6 +5,8 @@ import argparse
 import sys
 from pathlib import Path
 
+import requests
+
 from . import TAGLINE, __version__
 from .config import load_config
 from .db import Database
@@ -62,10 +64,18 @@ def cmd_scan(args) -> int:
     print(f"Source : {src or '(none, live only)'}")
     print()
 
+    client = SafeClient(url, extra_hosts, config["http"]["timeout"]) if url else None
+    if client is not None:  # preflight: an unreachable target must not look like a clean scan
+        try:
+            client.get("/")
+        except requests.RequestException as exc:
+            print(f"❌ Target not reachable at {url}: {type(exc).__name__}. "
+                  "Is the app running?", file=sys.stderr)
+            return 2
+
     db = Database(args.db or config["storage"]["db_path"])
     scan_id = db.start_scan(url, str(src) if src else None, __version__)
     try:
-        client = SafeClient(url, extra_hosts, config["http"]["timeout"]) if url else None
         ctx = ScanContext(url=url, src=src, config=config, http=client)
         try:
             findings = run_checks(ctx, config)
@@ -79,6 +89,13 @@ def cmd_scan(args) -> int:
         db.finish_scan(scan_id, summarise(findings))
         print(render(findings, scan_id))
         return 1 if any(f.status is Status.FAIL for f in findings) else 0
+    except KeyboardInterrupt:  # kill switch: stop cleanly, keep the record
+        db.finish_scan(scan_id, {}, status="INTERRUPTED")
+        print("\n⛔ Scan interrupted. Nothing further was sent.", file=sys.stderr)
+        return 130
+    except Exception:
+        db.finish_scan(scan_id, {}, status="FAILED")
+        raise
     finally:
         db.close()
 
